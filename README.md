@@ -1,9 +1,3 @@
-
-Here’s the README updated with live emojis to make it more engaging and visually appealing:
-
-markdown
-Copy
-Edit
 # 🚀 Distributed Task Management System
 
 This project is a **cloud-based simulation** that manages tasks across distributed virtual machines (VMs). It incorporates concepts of cloud computing, multithreading, and virtual disk storage to create a robust system for task management.
