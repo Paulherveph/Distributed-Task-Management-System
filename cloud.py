@@ -48,8 +48,10 @@ class Cloud:
             task_id = int(args[1])
             vm = next((vm for vm in self.vms if vm.vm_id == vm_id), None)
             if vm:
-                vm.task_queue = [t for t in vm.task_queue if t["id"] != task_id]
-                return f"Task {task_id} deleted from VM {vm_id}"
+                deleted = vm.delete_task(task_id)
+                if deleted:
+                    return f"Task {task_id} deleted from VM {vm_id}"
+                return f"[ERROR] Task {task_id} not found in VM {vm_id}."
             return f"[ERROR] VM {vm_id} not found."
 
         elif cmd == "update-task":
@@ -86,6 +88,7 @@ class Cloud:
             vm = next((vm for vm in self.vms if vm.vm_id == vm_id), None)
             if vm:
                 all_tasks = vm.disk.list_all_tasks()
+                print(f"[INFO] list-all-tasks command completed for VM {vm_id}.")
                 return f"All tasks in VM {vm_id}: {all_tasks}"
             return f"[ERROR] VM {vm_id} not found."
 
