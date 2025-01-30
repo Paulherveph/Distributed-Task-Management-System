@@ -52,20 +52,28 @@ class VirtualDisk:
     def read_block(self, block_number):
         """
         Read and parse a task from a specific block.
-        Returns a dictionary with Task ID and Task Data.
+        Returns a dictionary with Task ID and Task Data or None for empty blocks.
         """
         with open(self.file_name, "rb") as disk:
             disk.seek(block_number * self.block_size)
             block = disk.read(self.block_size)
 
+            # Check if the block is uninitialized (all zeros)
+            if block == b'\x00' * self.block_size:
+                return None  # Return None for empty blocks
+
             # Parse the block header
-            task_id, data_size = struct.unpack("II", block[:8])  # First 8 bytes
-            task_data = block[8:8 + data_size].decode("utf-8").strip('\x00')
+            try:
+                task_id, data_size = struct.unpack("II", block[:8])  # First 8 bytes
+                task_data = block[8:8 + data_size].decode("utf-8").strip('\x00')
 
-            if task_id == 0:  # Empty block
+                if task_id == 0:  # Empty task
+                    return None
+
+                return {"id": task_id, "data": task_data}
+            except struct.error:
+                print(f"[ERROR] Malformed block at block number {block_number}.")
                 return None
-
-            return {"id": task_id, "data": task_data}
 
     def find_task_by_id(self, task_id):
         """
@@ -85,21 +93,53 @@ class VirtualDisk:
 
     def list_all_tasks(self):
         """
-        List all tasks stored in the virtual disk by reading the index table.
+        Retrieve all tasks stored on the virtual disk.
+        Stop scanning when an empty block is encountered.
         """
         tasks = []
-        with open(self.file_name, "rb") as disk:
-            disk.seek(0)
-            index_table = disk.read(self.block_size).rstrip(b'\x00')
-
-            # Parse index table
-            for i in range(0, len(index_table), 8):
-                task_id, block_number = struct.unpack("II", index_table[i:i + 8])
-                task_data = self.read_block(block_number)
-                if task_data:
-                    tasks.append(task_data)
-
+        for block_number in range(1, self.num_blocks):  # Skip block 0 (index table)
+            task = self.read_block(block_number)
+            if task:
+                tasks.append(task)  # Append valid task
+            else:
+                # Stop scanning once an empty block is found
+                break
+        print(f"[INFO] Completed scanning disk '{self.file_name}'. Total tasks found: {len(tasks)}")
         return tasks
+
+    def delete_task(self, task_id):
+        """
+        Delete a task by its ID from the virtual disk.
+        """
+        with open(self.file_name, "r+b") as disk:
+            # Read the index table from Block 0
+            disk.seek(0)
+            index_table = disk.read(self.block_size)
+            updated_table = b""
+            task_found = False
+
+            # Parse the index table and remove the task entry
+            for i in range(0, len(index_table.rstrip(b'\x00')), 8):
+                stored_task_id, block_number = struct.unpack("II", index_table[i:i + 8])
+                if stored_task_id == task_id:
+                    # Clear the corresponding block on the disk
+                    disk.seek(block_number * self.block_size)
+                    disk.write(b'\x00' * self.block_size)  # Overwrite with zeros
+                    task_found = True
+                    print(f"[INFO] Block {block_number} cleared for Task ID {task_id}.")
+                else:
+                    updated_table += struct.pack("II", stored_task_id, block_number)
+
+            # Write the updated index table back to Block 0
+            disk.seek(0)
+            disk.write(updated_table.ljust(self.block_size, b'\x00'))
+
+        if task_found:
+            print(f"[INFO] Task ID {task_id} successfully deleted.")
+        else:
+            print(f"[ERROR] Task ID {task_id} not found.")
+
+        return task_found
 
     def clear_disk(self):
         """

@@ -71,16 +71,33 @@ class VirtualMachine:
     def get_processed_tasks(self):
         """Retrieve processed tasks from both memory and the virtual disk."""
         processed_tasks = self.processed_tasks.copy()  # Start with in-memory processed tasks
-        
+
         # Read processed tasks from the virtual disk
         disk_tasks = []
-        for block_id in range(self.disk.num_blocks):
+        for block_id in range(1, self.disk.num_blocks):  # Skip the index table block (block 0)
             task = self.disk.read_block(block_id)
             if task:
                 disk_tasks.append(task)
 
         print(f"[INFO] Processed tasks retrieved from VM {self.vm_id}.")
         return processed_tasks + disk_tasks  # Combine memory & disk tasks
+
+    def delete_task(self, task_id):
+        """
+        Delete a task from the queue and the disk.
+        """
+        with self.lock:
+            # Remove task from in-memory queue
+            self.task_queue = [task for task in self.task_queue if task["id"] != task_id]
+            # Delete task from the disk
+            task_deleted = self.disk.delete_task(task_id)
+
+        if task_deleted:
+            print(f"[INFO] Task {task_id} deleted from VM {self.vm_id}.")
+            return True
+        else:
+            print(f"[ERROR] Task {task_id} not found in VM {self.vm_id}.")
+            return False
 
     def stop(self):
         """Stop the VM."""
